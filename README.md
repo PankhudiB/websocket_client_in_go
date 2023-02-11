@@ -1,4 +1,4 @@
-## WebSockets Client in Go: A hijackers' perspective 
+## WebSocket Client in Go 
 ![img_11.png](images/img_11.png)
 
 Let's build a WebSocket client and server in golang.

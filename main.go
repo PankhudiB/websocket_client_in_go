@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
@@ -13,33 +14,54 @@ import (
 func main() {
 	url := "ws://localhost:8080/talk-to-server"
 	fmt.Println("Starting WebSocket Client...")
-
 	fmt.Println("Dialing to WebSocket Server...\n\n")
-	ctx := context.Background()
-	conn, _, _, err := ws.Dial(ctx, url)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	dataBytes, _, err := wsutil.ReadServerData(conn)
-	if err != nil {
-		fmt.Println("Error reading from websocket connection ! ", err.Error())
-	}
 
+	conn, _, err := dialConn(url)
+	dataBytes := read(conn)
+	deserializeMessage(err, dataBytes)
+}
+
+func deserializeMessage(err error, dataBytes []byte) {
+	messageWrapper, err := topLevelDeserializing(err, dataBytes)
+	if messageWrapper.MessageType == "A" {
+		deserializeSpecificType(err, messageWrapper)
+	}
+}
+
+func deserializeSpecificType(err error, messageWrapper MessageWrapper) {
+	subMessage := MessageTypeA{}
+	err = json.Unmarshal(messageWrapper.Content, &subMessage)
+	if err != nil {
+		fmt.Println("Error ", err.Error())
+	}
+	fmt.Println("\n\nLevel 2 Unmarshalling...", "\n", "subMessage.Name : ", subMessage.Name, "\n", "subMessage.Place : ", subMessage.Place)
+}
+
+func topLevelDeserializing(err error, dataBytes []byte) (MessageWrapper, error) {
 	messageWrapper := MessageWrapper{}
 	err = json.Unmarshal(dataBytes, &messageWrapper)
 	if err != nil {
 		fmt.Println("Error unmarshalling...", err.Error())
 	}
-
 	fmt.Println("Level 1 Unmarshalling...", "\n", "Type : ", messageWrapper.MessageType, "\n", "Content : ", messageWrapper.Content)
+	return messageWrapper, err
+}
 
-	subMessage := SubMessage{}
-	err = json.Unmarshal(messageWrapper.Content, &subMessage)
+func read(conn net.Conn) []byte {
+	dataBytes, _, err := wsutil.ReadServerData(conn)
 	if err != nil {
-		fmt.Println("Error ", err.Error())
+		fmt.Println("Error reading from websocket connection ! ", err.Error())
 	}
+	return dataBytes
+}
 
-	fmt.Println("\n\nLevel 2 Unmarshalling...", "\n", "subMessage.Name : ", subMessage.Name, "\n", "subMessage.Place : ", subMessage.Place)
+func dialConn(url string) (net.Conn, ws.Handshake, error) {
+	ctx := context.Background()
+	conn, _, _, err := ws.Dial(ctx, url)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	return conn, _, err
 }
 
 type MessageWrapper struct {
@@ -47,7 +69,7 @@ type MessageWrapper struct {
 	Content     json.RawMessage `json:"content"`
 }
 
-type SubMessage struct {
+type MessageTypeA struct {
 	Name  string `json:"name"`
 	Place string `json:"place"`
 }
